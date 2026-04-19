@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PortfolioAI — AI Portfolio Analyser</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+</head>
+<body>
+
+  <canvas id="bgCanvas"></canvas>
+
+  <!-- ===== HERO ===== -->
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="badge"><span class="badge-dot"></span>AI Web Dev · Project 10 · UWE Bristol</div>
+      <h1><span class="hero-line">Portfolio</span><span class="hero-line accent">Analyser</span></h1>
+      <p class="hero-sub">Paste your portfolio HTML or describe your site. Gemini AI scores it, visualises weaknesses, and you can chat with it about any suggestion.</p>
+      <a href="#analyser" class="hero-cta">Start Analysing ↓</a>
+    </div>
+    <div class="hero-graphic">
+      <div class="orbit-ring ring-1"></div>
+      <div class="orbit-ring ring-2"></div>
+      <div class="orbit-ring ring-3"></div>
+      <div class="orbit-center">AI</div>
+    </div>
+  </section>
+
+  <!-- ===== HOW IT WORKS ===== -->
+  <section class="how-it-works">
+    <div class="container">
+      <h2 class="section-label">How It Works</h2>
+      <div class="steps">
+        <div class="step"><span class="step-num">01</span><h3>Paste Your Portfolio</h3><p>Add your portfolio HTML or describe your site in plain text.</p></div>
+        <div class="step-arrow">→</div>
+        <div class="step"><span class="step-num">02</span><h3>AI Analyses It</h3><p>Gemini 1.5 Flash scores 6 categories and produces prioritised suggestions.</p></div>
+        <div class="step-arrow">→</div>
+        <div class="step"><span class="step-num">03</span><h3>Chat &amp; Improve</h3><p>Ask follow-up questions on any suggestion, then re-analyse to track your score improvement.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== ANALYSER TOOL ===== -->
+  <section class="analyser-section" id="analyser">
+    <div class="container">
+      <h2 class="section-label">Analyser Tool</h2>
+
+      <!-- Step indicator -->
+      <div class="step-indicator" id="stepIndicator">
+        <div class="step-pip active" data-step="1"><span>1</span> Input</div>
+        <div class="step-pip" data-step="2"><span>2</span> Results</div>
+        <div class="step-pip" data-step="3"><span>3</span> Compare</div>
+      </div>
+
+      <!-- ---- STEP 1: INPUT ---- -->
+      <div id="stepInput">
+        <div class="tool-card">
+          <div class="field">
+            <label for="apiKey">Gemini API Key <span class="field-hint">— free at <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a></span></label>
+            <input type="password" id="apiKey" placeholder="AIza..." autocomplete="off"/>
+          </div>
+          <div class="field">
+            <label for="urlInput">Portfolio URL <span class="field-hint">— optional, for reference</span></label>
+            <input type="url" id="urlInput" placeholder="https://yourportfolio.com"/>
+          </div>
+          <div class="field">
+            <label for="contentInput">Portfolio HTML or Description <span class="required">*</span></label>
+            <textarea id="contentInput" placeholder="Paste your portfolio's HTML here, or describe your site — e.g. 'My portfolio has a hero with my name and title, a grid of 4 project cards, an about section and a contact form. It uses a dark navy background. There are no animations and the mobile layout breaks...'"></textarea>
+          </div>
+          <div id="errorMsg" class="error-msg" style="display:none;"></div>
+          <button class="analyse-btn" id="analyseBtn">
+            <span id="btnText">Analyse with Gemini →</span>
+            <span id="btnLoader" class="btn-loader" style="display:none;"><span class="dot-pulse"></span></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ---- STEP 2: RESULTS ---- -->
+      <div id="stepResults" style="display:none;">
+
+        <!-- Score + Radar Row -->
+        <div class="results-top-row">
+          <!-- Overall score -->
+          <div class="score-card">
+            <div class="score-block">
+              <span class="score-number" id="scoreNumber">0</span>
+              <span class="score-denom">/10</span>
+            </div>
+            <div class="score-label">Overall Score</div>
+            <div class="score-bar"><div class="score-fill" id="scoreFill"></div></div>
+            <div class="score-bar-labels"><span>Needs Work</span><span>Excellent</span></div>
+            <div class="summary-card" id="summaryCard"></div>
+          </div>
+
+          <!-- Radar chart -->
+          <div class="radar-card">
+            <div class="radar-title">Category Breakdown</div>
+            <canvas id="radarCanvas" width="280" height="280"></canvas>
+          </div>
+        </div>
+
+        <!-- Category filter tabs -->
+        <div class="filter-tabs" id="filterTabs">
+          <button class="filter-tab active" data-cat="All">All</button>
+          <button class="filter-tab" data-cat="Visual Design">Visual</button>
+          <button class="filter-tab" data-cat="Interactivity">Interactivity</button>
+          <button class="filter-tab" data-cat="Content">Content</button>
+          <button class="filter-tab" data-cat="Performance">Performance</button>
+          <button class="filter-tab" data-cat="Accessibility">Accessibility</button>
+          <button class="filter-tab" data-cat="Navigation">Navigation</button>
+        </div>
+
+        <!-- Suggestions list -->
+        <div class="suggestions-grid" id="suggestionsGrid"></div>
+
+        <!-- Action row -->
+        <div class="action-row">
+          <button class="secondary-btn" id="reanalyseBtn">Re-analyse &amp; Compare →</button>
+          <button class="reset-btn" id="resetBtn">← Start Over</button>
+        </div>
+      </div>
+
+      <!-- ---- STEP 3: COMPARE ---- -->
+      <div id="stepCompare" style="display:none;">
+        <div class="tool-card">
+          <div class="compare-header">
+            <div class="compare-badge">Re-Analysis Mode</div>
+            <p class="compare-intro">Paste your updated portfolio HTML below. Gemini will re-score it and show how much you improved.</p>
+          </div>
+          <div class="field">
+            <label for="contentV2">Updated Portfolio HTML or Description <span class="required">*</span></label>
+            <textarea id="contentV2" placeholder="Paste your updated portfolio here..."></textarea>
+          </div>
+          <div id="errorMsg2" class="error-msg" style="display:none;"></div>
+          <button class="analyse-btn" id="reanalyseSubmitBtn">
+            <span id="reBtnText">Re-Analyse →</span>
+            <span id="reBtnLoader" class="btn-loader" style="display:none;"><span class="dot-pulse"></span></span>
+          </button>
+          <button class="reset-btn" style="margin-top:0.75rem;" id="backToResultsBtn">← Back to Results</button>
+        </div>
+
+        <!-- Comparison results -->
+        <div id="compareResults" style="display:none;">
+          <div class="compare-scores">
+            <div class="compare-score-block">
+              <div class="cs-label">Before</div>
+              <div class="cs-num" id="scoreBefore">—</div>
+              <div class="cs-sub">/10</div>
+            </div>
+            <div class="compare-arrow">
+              <span id="compareArrow">→</span>
+              <div class="compare-delta" id="compareDelta"></div>
+            </div>
+            <div class="compare-score-block">
+              <div class="cs-label">After</div>
+              <div class="cs-num after" id="scoreAfter">—</div>
+              <div class="cs-sub">/10</div>
+            </div>
+          </div>
+          <div class="compare-bars" id="compareBars"></div>
+          <div class="summary-card" id="summaryV2" style="margin-top:1.25rem;"></div>
+          <div class="suggestions-grid" id="suggestionsGridV2" style="margin-top:1.25rem;"></div>
+          <button class="reset-btn" style="margin-top:1.5rem;" id="resetBtn2">← Start Over</button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===== FOOTER ===== -->
+  <footer>
+    <div class="container">
+      <p>Built with HTML, CSS &amp; JavaScript · Powered by <strong>Gemini 1.5 Flash</strong></p>
+      <p class="footer-sub">Advanced Technologies · UFCFW3-30-3 · UWE Bristol 2025–26</p>
+    </div>
+  </footer>
+
+  <!-- ===== CHAT MODAL ===== -->
+  <div class="modal-overlay" id="chatModal" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" id="chatModalTitle">Follow-up Chat</div>
+          <div class="modal-subtitle">Ask Gemini anything about this suggestion</div>
+        </div>
+        <button class="modal-close" id="closeChatModal">✕</button>
+      </div>
+      <div class="chat-window" id="chatWindow"></div>
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="Ask a follow-up question..." />
+        <button class="chat-send-btn" id="chatSendBtn">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
