@@ -208,29 +208,77 @@ function drawRadar(categoryScores) {
 /* -----------------------------------------------
    GEMINI API CALL
 ----------------------------------------------- */
-async function callGemini(apiKey, prompt) {
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.7, maxOutputTokens: 1500 },
-    }),
-  });
+const ANALYSIS_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    score: { type: 'INTEGER' },
+    summary: { type: 'STRING' },
+    categoryScores: {
+      type: 'OBJECT',
+      properties: {
+        'Visual Design':  { type: 'INTEGER' },
+        'Interactivity':  { type: 'INTEGER' },
+        'Content':        { type: 'INTEGER' },
+        'Performance':    { type: 'INTEGER' },
+        'Accessibility':  { type: 'INTEGER' },
+        'Navigation':     { type: 'INTEGER' },
+      },
+      required: ['Visual Design','Interactivity','Content','Performance','Accessibility','Navigation'],
+    },
+    suggestions: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          title:       { type: 'STRING' },
+          description: { type: 'STRING' },
+          priority:    { type: 'STRING', enum: ['high','medium','low'] },
+          category:    { type: 'STRING', enum: ['Visual Design','Interactivity','Content','Performance','Accessibility','Navigation'] },
+        },
+        required: ['title','description','priority','category'],
+      },
+    },
+  },
+  required: ['score','summary','categoryScores','suggestions'],
+};
 
-  if (!res.ok) {
-    const err = await res.json().catch(()=>({}));
-    throw new Error(err?.error?.message || `HTTP error ${res.status}`);
+async function callGemini(apiKey, prompt, retries = 3) {
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 8192,
+          responseMimeType: 'application/json',
+          responseSchema: ANALYSIS_SCHEMA,
+        },
+      }),
+    });
+
+    if (res.status === 503 || res.status === 429) {
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, attempt * 2000));
+        continue;
+      }
+    }
+
+    if (!res.ok) {
+      const err = await res.json().catch(()=>({}));
+      throw new Error(err?.error?.message || `HTTP error ${res.status}`);
+    }
+
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
   }
-
-  const data = await res.json();
-  if (data.error) throw new Error(data.error.message);
-  return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
 async function callGeminiChat(apiKey, history) {
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
   const contents = history.map(msg => ({
     role: msg.role === 'user' ? 'user' : 'model',
     parts: [{ text: msg.text }]
@@ -249,37 +297,12 @@ async function callGeminiChat(apiKey, history) {
 function buildAnalysisPrompt(url, content) {
   return `You are an expert web designer and UX consultant specialising in portfolio websites for computer science and creative technology students.
 
-Analyse the following portfolio website content and provide detailed, actionable feedback.
+Analyse the following portfolio website content and provide detailed, actionable feedback. Score the portfolio overall (1-10) and across six categories. Provide 6-10 specific, technical suggestions covering: animations and interactivity, modern 2024-25 design trends, AI-powered features that could be added, accessibility, and mobile responsiveness.
 
 ${url ? `Portfolio URL (for reference): ${url}` : ''}
 
 Portfolio Content / Description:
-${content}
-
-Respond ONLY with a valid JSON object — no markdown, no backticks, no extra text. Use exactly this structure:
-
-{
-  "score": <integer 1-10>,
-  "summary": "<2-3 sentence overall assessment>",
-  "categoryScores": {
-    "Visual Design": <integer 1-10>,
-    "Interactivity": <integer 1-10>,
-    "Content": <integer 1-10>,
-    "Performance": <integer 1-10>,
-    "Accessibility": <integer 1-10>,
-    "Navigation": <integer 1-10>
-  },
-  "suggestions": [
-    {
-      "title": "<short descriptive title>",
-      "description": "<2-3 sentence specific, actionable suggestion>",
-      "priority": "<high|medium|low>",
-      "category": "<Visual Design|Interactivity|Content|Performance|Accessibility|Navigation>"
-    }
-  ]
-}
-
-Provide 6-10 suggestions. Be specific and technical. Focus on: animations and interactivity, modern 2024-25 design trends, AI-powered features that could be added, accessibility, and mobile responsiveness.`;
+${content}`;
 }
 
 
@@ -287,8 +310,7 @@ Provide 6-10 suggestions. Be specific and technical. Focus on: animations and in
    PARSE GEMINI JSON RESPONSE
 ----------------------------------------------- */
 function parseJSON(raw) {
-  const cleaned = raw.replace(/```json\s*/gi,'').replace(/```/g,'').trim();
-  try { return JSON.parse(cleaned); }
+  try { return JSON.parse(raw.trim()); }
   catch(e) { throw new Error('Could not parse Gemini response as JSON. Please try again.'); }
 }
 
